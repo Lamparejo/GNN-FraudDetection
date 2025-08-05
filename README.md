@@ -89,25 +89,25 @@ graph['transaction', 'uses', 'card'].edge_index = transaction_card_edges
 
 ## Key Features & Capabilities
 
-### 🎯 Core Functionality
+### Core Functionality
 - **Multi-model Architecture**: GraphSAGE, GAT, and HeteroGNN implementations
 - **Real-time Inference**: Sub-second fraud scoring for live transactions
 - **Batch Processing**: Efficient handling of historical data analysis
 - **Model Interpretability**: GNN explainer for decision transparency
 
-### 📊 Data Processing
+### Data Processing
 - **Automated Feature Engineering**: 50+ engineered features from raw transaction data
 - **Graph Construction**: Automated heterogeneous graph building from tabular data
 - **Missing Value Handling**: Intelligent imputation preserving graph structure
 - **Scalable Pipeline**: Processes millions of transactions efficiently
 
-### 🔧 MLOps & Production
+### MLOps & Production
 - **Configurable Architecture**: YAML-based configuration management
 - **Model Versioning**: Automated model checkpointing and version control
 - **Performance Monitoring**: Real-time metrics tracking and alerting
 - **A/B Testing Framework**: Compare model performance across different strategies
 
-### 📈 Visualization & Monitoring
+### Visualization & Monitoring
 - **Interactive Dashboard**: Streamlit-based real-time monitoring interface
 - **Network Visualization**: Graph topology and fraud pattern visualization
 - **Performance Metrics**: Comprehensive fraud detection KPIs
@@ -135,31 +135,168 @@ graph['transaction', 'uses', 'card'].edge_index = transaction_card_edges
 - CUDA-compatible GPU (optional, recommended)
 - 8GB RAM minimum (16GB recommended)
 
-### Installation
+### Automated Setup (Recommended)
+
+**For Linux/Mac:**
 ```bash
 # Clone repository
 git clone https://github.com/your-username/fraud-detection-gnn.git
 cd fraud-detection-gnn
 
-# Create virtual environment
-python -m venv .venv
-source .venv/bin/activate  # Linux/Mac
-# or .venv\Scripts\activate  # Windows
+# Run automated setup script
+chmod +x setup_environment.sh
+./setup_environment.sh
+```
 
-# Install dependencies
+**For Windows:**
+```cmd
+REM Clone repository
+git clone https://github.com/your-username/fraud-detection-gnn.git
+cd fraud-detection-gnn
+
+REM Run automated setup script
+setup_environment.bat
+```
+
+### Manual Installation
+
+**Step 1: Python Environment**
+```bash
+# Create virtual environment
+python -m venv venv
+source venv/bin/activate  # Linux/Mac
+# or venv\Scripts\activate  # Windows
+
+# Upgrade pip
+pip install --upgrade pip
+```
+
+**Step 2: Install Dependencies**
+```bash
+# Install PyTorch (CPU version)
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
+
+# Install PyTorch Geometric
+pip install torch-geometric
+
+# Install other requirements
 pip install -r requirements.txt
 ```
 
-### Data Setup
-1. Download the IEEE-CIS Fraud Detection Dataset from [Kaggle](https://www.kaggle.com/c/ieee-fraud-detection/data)
-2. Extract files to `data/raw/` directory:
+### Data Setup - IEEE-CIS Fraud Detection Dataset
+
+**Important**: The dataset files are excluded from Git (see `.gitignore`). You must download them manually.
+
+**Step 1: Get Kaggle API Access**
+1. Create account at [kaggle.com](https://www.kaggle.com)
+2. Go to Account → Create New API Token
+3. Download `kaggle.json` file
+
+**Step 2: Configure Kaggle CLI**
+```bash
+# Install Kaggle CLI
+pip install kaggle
+
+# Setup credentials (Linux/Mac)
+mkdir -p ~/.kaggle
+cp /path/to/kaggle.json ~/.kaggle/
+chmod 600 ~/.kaggle/kaggle.json
+
+# Setup credentials (Windows)
+mkdir %USERPROFILE%\.kaggle
+copy kaggle.json %USERPROFILE%\.kaggle\
+```
+
+**Step 3: Download Dataset**
+```bash
+# Method 1: Using Kaggle CLI (recommended)
+kaggle competitions download -c ieee-fraud-detection
+
+# Method 2: Manual download
+# Visit: https://www.kaggle.com/c/ieee-fraud-detection/data
+# Download all CSV files manually
+```
+
+**Step 4: Extract and Place Files**
+```bash
+# Extract downloaded files
+unzip ieee-fraud-detection.zip
+
+# Move files to project structure
+mkdir -p data/raw
+mv train_transaction.csv data/raw/
+mv train_identity.csv data/raw/
+mv test_transaction.csv data/raw/
+mv test_identity.csv data/raw/
+```
+
+**Expected Data Structure:**
 ```
 data/raw/
-├── train_transaction.csv
-├── train_identity.csv
-├── test_transaction.csv
-└── test_identity.csv
+├── train_transaction.csv  (~651 MB)
+├── train_identity.csv     (~25 MB)
+├── test_transaction.csv   (~585 MB)
+└── test_identity.csv      (~25 MB)
 ```
+
+**Step 5: Verify Data Installation**
+```bash
+# Run comprehensive system diagnostic (recommended)
+python diagnostic.py
+
+# Manual file verification
+ls -lh data/raw/
+# Expected output:
+# train_transaction.csv    ~651M
+# train_identity.csv       ~25M  
+# test_transaction.csv     ~585M
+# test_identity.csv        ~25M
+
+# Verify data loading works
+python -c "
+import pandas as pd
+df = pd.read_csv('data/raw/train_transaction.csv', nrows=5)
+print(f'Transaction data preview: {df.shape}')
+print('✅ Data files accessible')
+"
+```
+
+**Troubleshooting**
+
+If you encounter issues:
+
+1. **Missing dependencies**: See `TROUBLESHOOTING.md` for detailed solutions
+2. **Python version**: Ensure Python 3.8+ is installed
+3. **PyTorch Geometric issues**: Try alternative installation methods in troubleshooting guide
+4. **Data download problems**: Verify Kaggle credentials and competition acceptance
+5. **Permission issues**: Check file permissions and directory access
+
+**Quick Fix for Common Issues:**
+```bash
+# Run automated diagnostic and fix script
+python diagnostic.py
+
+# If errors persist, check troubleshooting guide
+cat TROUBLESHOOTING.md
+```
+
+# Quick data validation
+python -c "
+import pandas as pd
+import os
+
+files = ['train_transaction.csv', 'train_identity.csv', 'test_transaction.csv', 'test_identity.csv']
+for file in files:
+    path = f'data/raw/{file}'
+    if os.path.exists(path):
+        df = pd.read_csv(path, nrows=5)
+        print(f'{file}: {df.shape} (showing first 5 rows)')
+    else:
+        print(f'ERROR: {file} not found')
+"
+```
+
+> **Important**: The dataset is large (~1GB total). Ensure you have sufficient disk space and a stable internet connection. All data files are automatically excluded from git tracking via `.gitignore`.
 
 ### Quick Start
 ```bash
@@ -334,12 +471,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 - **GitHub Issues**: [Project Issues](https://github.com/your-username/fraud-detection-gnn/issues)
 - **Documentation**: [Full Documentation](docs/)
 
-## Acknowledgments
-
-- IEEE-CIS Fraud Detection Dataset providers
-- PyTorch Geometric community
-- Streamlit framework developers
-- Open source GNN research community
 
 ---
 
