@@ -1,0 +1,149 @@
+# Project configurations
+project:
+  name: "fraud_detection_gnn"
+  version: "1.0.0"
+  description: "Fraud detection system using Graph Neural Networks"
+
+# Data configurations
+data:
+  train_transaction: "ieee-fraud-detection/train_transaction.csv"
+  train_identity: "ieee-fraud-detection/train_identity.csv"
+  test_transaction: "ieee-fraud-detection/test_transaction.csv"
+  test_identity: "ieee-fraud-detection/test_identity.csv"
+  
+  # Processing parameters
+  sample_size: 50000  # For development, use null for complete dataset
+  test_split: 0.2
+  val_split: 0.1
+  random_state: 42
+
+# Graph configurations
+graph:
+  # Node types
+  node_types:
+    - "transaction"
+    - "user"
+    - "card"
+    - "device"
+  
+  # Edge types
+  edge_types:
+    - ["user", "makes", "transaction"]
+    - ["transaction", "uses", "card"]
+    - ["transaction", "from", "device"]
+    - ["card", "shared_with", "card"]
+    - ["device", "connected_to", "device"]
+  
+  # Construction settings
+  min_connections: 2
+  max_degree: 100
+
+# Model configurations
+model:
+  type: "GraphSAGE"  # GraphSAGE, GAT, HeteroGNN
+  
+  # Architecture
+  hidden_dim: 256
+  num_layers: 3
+  dropout: 0.3
+  heads: 4  # For GAT
+  
+  # Aggregation
+  aggr: "mean"  # mean, max, add
+  
+  # Normalization
+  norm: "batch"  # batch, layer, instance
+
+# Training configurations
+training:
+  epochs: 100
+  batch_size: 1024
+  learning_rate: 0.001
+  weight_decay: 5e-4
+  early_stopping_patience: 10
+  
+  # Class balancing
+  class_weights:
+    fraud: 10.0
+    legitimate: 1.0
+  
+  # Scheduler
+  scheduler:
+    type: "ReduceLROnPlateau"
+    factor: 0.5
+    patience: 5
+    min_lr: 1e-6
+
+# Hardware configurations
+hardware:
+  device: "auto"  # auto, cpu, cuda
+  num_workers: 4
+  pin_memory: true
+  mixed_precision: true
+
+# Logging configurations
+logging:
+  level: "INFO"
+  wandb:
+    project: "fraud-detection-gnn"
+    entity: null
+    log_model: true
+  
+  # Metrics to track
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1"
+    - "auc_roc"
+    - "auc_pr"
+
+# Evaluation configurations
+evaluation:
+  metrics:
+    - "accuracy"
+    - "precision"
+    - "recall"
+    - "f1_score"
+    - "roc_auc"
+    - "pr_auc"
+    - "confusion_matrix"
+  
+  # Thresholds for optimization
+  thresholds: [0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9]
+
+# Explainability configurations
+explainability:
+  method: "GNNExplainer"
+  num_samples: 100
+  epochs: 200
+  
+  # Visualization
+  max_nodes_visualize: 50
+  save_explanations: true
+
+# Dashboard configurations
+dashboard:
+  title: "Fraud Detection Dashboard"
+  port: 8501
+  theme: "dark"
+  
+  # Cache settings
+  cache_ttl: 300  # 5 minutes
+  
+  # Auto-refresh
+  auto_refresh: true
+  refresh_interval: 30  # seconds
+
+# Production configurations
+production:
+  model_registry: "results/models"
+  inference_batch_size: 10000
+  api_timeout: 5.0
+  max_concurrent_requests: 100
+  
+  # Monitoring
+  monitoring:
+    enable: true
+    log_predictions: true
+    alert_threshold: 0.05  # 5% error rate
