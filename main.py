@@ -44,8 +44,8 @@ class FraudDetectionSystem:
     def setup_data_pipeline(self) -> None:
         """Set up data pipeline."""
         with Timer("Data pipeline setup"):
-            # Use only the base data directory
-            data_path = str(Path("ieee-fraud-detection"))
+            # Use the correct data directory path
+            data_path = str(Path("data/raw"))
             self.data_pipeline = DataPipeline(data_path)
             logger.info("Data pipeline configured")
     
