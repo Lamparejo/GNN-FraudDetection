@@ -433,45 +433,6 @@ fraud-detection-gnn/
 └── LICENSE                   # MIT License
 ```
 
-## Contributing
-
-### Development Setup
-```bash
-# Install development dependencies
-pip install -r requirements-dev.txt
-
-# Run tests
-python -m pytest tests/
-
-# Code formatting
-black src/ webapp/
-flake8 src/ webapp/
-```
-
-### Adding New Models
-1. Implement model class inheriting from `BaseGNNModel`
-2. Add model type to `ModelFactory`
-3. Update configuration schema
-4. Add unit tests
-
-### Adding New Features
-1. Implement feature engineering in `FeatureEngineer`
-2. Update graph construction in `GraphBuilder`
-3. Test with existing models
-4. Document feature impact
-
-## License
-
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
-
-## Contact & Support
-
-- **Project Maintainer**: [Your Name]
-- **Email**: [your.email@domain.com]
-- **GitHub Issues**: [Project Issues](https://github.com/your-username/fraud-detection-gnn/issues)
-- **Documentation**: [Full Documentation](docs/)
-
-
 ---
 
 *Built with PyTorch Geometric, Streamlit, and modern MLOps practices for enterprise-grade fraud detection.*
