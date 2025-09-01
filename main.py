@@ -46,7 +46,16 @@ class FraudDetectionSystem:
         with Timer("Data pipeline setup"):
             # Use the correct data directory path
             data_path = str(Path("data/raw"))
-            self.data_pipeline = DataPipeline(data_path)
+            # Read split configuration from config
+            val_split = float(self.config.get('data.val_split', 0.1))
+            test_split = float(self.config.get('data.test_split', 0.2))
+            random_state = int(self.config.get('data.random_state', 42))
+            self.data_pipeline = DataPipeline(
+                data_path=data_path,
+                val_split=val_split,
+                test_split=test_split,
+                random_state=random_state
+            )
             logger.info("Data pipeline configured")
     
     def load_and_process_data(self) -> None:
@@ -67,14 +76,26 @@ class FraudDetectionSystem:
         """Create the GNN model."""
         with Timer("Model creation"):
             model_config = self.config.model
+            # Default inner conv type (used only for heterogeneous graphs)
+            inner = 'SAGE'
             
             # Determine input dimension and model type
             if hasattr(self.train_graph, 'x_dict'):
                 input_dim = self.train_graph['transaction'].x.shape[1]
                 metadata = (self.train_graph.node_types, self.train_graph.edge_types)
-                # For heterogeneous graphs, use heterogeneous model
+                # For heterogeneous graphs, use heterogeneous model with inner type from config
                 model_type = 'HETERO'
-                logger.info("Detected heterogeneous graph, using HeteroGNN model")
+                # Map UI selection to inner convolution type
+                ui_type = model_config.get('type', 'GraphSAGE')
+                if isinstance(ui_type, str):
+                    ui_upper = ui_type.upper()
+                    if 'GAT' in ui_upper:
+                        inner = 'GAT'
+                    elif 'SAGE' in ui_upper or 'GRAPHSAGE' in ui_upper:
+                        inner = 'SAGE'
+                    else:
+                        inner = 'SAGE'
+                logger.info(f"Detected heterogeneous graph, using HeteroGNN model (inner: {inner})")
             else:
                 input_dim = self.train_graph.x.shape[1]
                 metadata = None
@@ -85,13 +106,14 @@ class FraudDetectionSystem:
                 # Specific parameters for heterogeneous model
                 model_params = {
                     'model_type': 'HETERO',
-                    'input_dim': input_dim,  # Still needed for factory, but not used
+                    'input_dim': input_dim,  # placeholder for factory API
                     'metadata': metadata,
                     'hidden_dim': model_config.get('hidden_dim', 256),
                     'num_classes': 2,
                     'num_layers': model_config.get('num_layers', 3),
                     'dropout': model_config.get('dropout', 0.3),
-                    'model_type_inner': 'SAGE'  # Force SAGE to work
+                    # Use inner conv type from selection
+                    'model_type_inner': inner
                 }
             else:
                 # Parameters for homogeneous models  
@@ -103,14 +125,13 @@ class FraudDetectionSystem:
                     'dropout': model_config.get('dropout', 0.3),
                     'metadata': metadata
                 }
-                
                 # Add extra parameters avoiding duplication
                 for key, value in model_config.items():
                     if key not in model_params:
                         model_params[key] = value
-            
+
+            # Instantiate the model (both branches reach here)
             self.model = ModelFactory.create_model(**model_params)
-            
             logger.info(f"Model created: {self.model.__class__.__name__}")
             # Don't count uninitialized lazy parameters
             try:

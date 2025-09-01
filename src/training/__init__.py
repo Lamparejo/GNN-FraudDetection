@@ -257,7 +257,7 @@ class GNNTrainer:
         # Configurar early stopping
         self.early_stopping = EarlyStopping(
             patience=config.get('early_stopping_patience', 10),
-            monitor='val_f1',
+            monitor='f1',
             mode='max'
         )
         
@@ -621,5 +621,20 @@ class GNNTrainer:
             "total_parameters": sum(p.numel() for p in self.model.parameters()),
             "trainable_parameters": sum(p.numel() for p in self.model.parameters() if p.requires_grad)
         }
+        
+        # Adicionar métricas padronizadas esperadas pelo dashboard
+        summary.update({
+            "accuracy": best_metrics.get('accuracy', 0.0),
+            "precision": best_metrics.get('precision', 0.0),
+            "recall": best_metrics.get('recall', 0.0),
+            "f1": best_metrics.get('f1', 0.0),
+            "auc_roc": best_metrics.get('auc_roc', 0.0),
+            "auc_pr": best_metrics.get('auc_pr', 0.0),
+            # métricas foco na classe fraude
+            "precision_fraud": best_metrics.get('precision_fraud', 0.0),
+            "recall_fraud": best_metrics.get('recall_fraud', 0.0),
+            "f1_fraud": best_metrics.get('f1_fraud', 0.0),
+            "specificity": best_metrics.get('specificity', 0.0)
+        })
         
         return summary

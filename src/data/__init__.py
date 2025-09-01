@@ -571,7 +571,11 @@ class DataPipeline:
     into a single, reusable pipeline.
     """
     
-    def __init__(self, data_path: str = "ieee-fraud-detection"):
+    def __init__(self, 
+                 data_path: str = "ieee-fraud-detection",
+                 val_split: float = 0.1,
+                 test_split: float = 0.2,
+                 random_state: int = 42):
         """
         Initialize data pipeline.
         
@@ -582,6 +586,10 @@ class DataPipeline:
         self.loader = DataLoader(data_path)
         self.engineer = FeatureEngineer()
         self.builder = GraphBuilder()
+        # Split configuration
+        self.val_split = float(val_split)
+        self.test_split = float(test_split)
+        self.random_state = int(random_state)
         
         self.train_data = None
         self.test_data = None
@@ -625,21 +633,65 @@ class DataPipeline:
         return self.train_graph, self.test_graph
     
     def _add_train_val_split(self, graph: HeteroData) -> HeteroData:
-        """Add train/validation split to graph."""
-        num_nodes = graph['transaction'].num_nodes
-        
-        # Simple split: 80% train, 20% validation
-        train_size = int(0.8 * num_nodes)
-        
+        """Add train/validation/test split to graph using stratified sampling when possible."""
+        num_nodes = int(graph['transaction'].num_nodes)
+        y = graph['transaction'].y.cpu().numpy() if hasattr(graph['transaction'], 'y') else np.zeros(num_nodes)
+        val_split = max(0.0, min(0.9, float(self.val_split)))
+        test_split = max(0.0, min(0.9, float(self.test_split)))
+        remaining = max(0.0, 1.0 - val_split - test_split)
+        if remaining <= 0.0:
+            # Ensure at least some training data
+            train_split = 0.8
+            val_split = 0.1
+            test_split = 0.1
+        else:
+            train_split = remaining
+
+        # Defaults
         train_mask = torch.zeros(num_nodes, dtype=torch.bool)
         val_mask = torch.zeros(num_nodes, dtype=torch.bool)
-        
-        train_mask[:train_size] = True
-        val_mask[train_size:] = True
-        
+        test_mask = torch.zeros(num_nodes, dtype=torch.bool)
+
+        try:
+            from sklearn.model_selection import StratifiedShuffleSplit
+            rng_state = int(self.random_state)
+            # First split: train_val vs test
+            sss1 = StratifiedShuffleSplit(n_splits=1, test_size=test_split, random_state=rng_state)
+            idx = np.arange(num_nodes)
+            train_val_idx, test_idx = next(sss1.split(idx, y))
+            # Second split: within train_val, split val proportionally
+            rel_val = val_split / (train_split + val_split) if (train_split + val_split) > 0 else 0.0
+            if rel_val > 0:
+                sss2 = StratifiedShuffleSplit(n_splits=1, test_size=rel_val, random_state=rng_state + 1)
+                train_idx, val_idx = next(sss2.split(train_val_idx, y[train_val_idx]))
+                train_idx = train_val_idx[train_idx]
+                val_idx = train_val_idx[val_idx]
+            else:
+                train_idx = train_val_idx
+                val_idx = np.array([], dtype=int)
+        except Exception:
+            # Fallback: random split without stratification
+            rng = np.random.default_rng(self.random_state)
+            idx = np.arange(num_nodes)
+            rng.shuffle(idx)
+            n_test = int(round(test_split * num_nodes))
+            n_val = int(round(val_split * (num_nodes - n_test)))
+            test_idx = idx[:n_test]
+            val_idx = idx[n_test:n_test + n_val]
+            train_idx = idx[n_test + n_val:]
+
+        train_mask[train_idx] = True
+        val_mask[val_idx] = True
+        test_mask[test_idx] = True
+
         graph['transaction'].train_mask = train_mask
         graph['transaction'].val_mask = val_mask
-        
+        graph['transaction'].test_mask = test_mask
+
+        logger.info(
+            f"Splits -> train: {train_mask.sum().item()} ({train_split:.2f}≈), "
+            f"val: {val_mask.sum().item()} ({val_split:.2f}), test: {test_mask.sum().item()} ({test_split:.2f})"
+        )
         return graph
     
     def get_data_summary(self) -> Dict[str, Any]:
