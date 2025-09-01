@@ -15,7 +15,7 @@ from sklearn.metrics import (
     roc_auc_score, average_precision_score, confusion_matrix
 )
 import numpy as np
-from typing import Dict, Optional, Tuple, Any
+from typing import Dict, Optional, Tuple, Any, Union
 from pathlib import Path
 import time
 import json
@@ -318,7 +318,7 @@ class GNNTrainer:
         else:
             raise ValueError(f"Otimizador não suportado: {optimizer_type}")
     
-    def _setup_scheduler(self) -> Optional[torch.optim.lr_scheduler.LRScheduler]:
+    def _setup_scheduler(self) -> Optional[Union[torch.optim.lr_scheduler.ReduceLROnPlateau, torch.optim.lr_scheduler.StepLR]]:
         """Configura o scheduler de learning rate."""
         scheduler_config = self.config.get('scheduler', {})
         
