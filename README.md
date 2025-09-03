@@ -19,7 +19,7 @@ Key challenges addressed:
 
 ### Business Value Delivered
 
-1. **Improved Detection Accuracy**: 25-40% improvement in fraud detection rates compared to traditional ML approaches
+1. **Improved Detection Accuracy**: Improvement in fraud detection rates compared to traditional ML approaches
 2. **Reduced False Positives**: Graph-based features help distinguish legitimate from fraudulent patterns
 3. **Network Effect Capture**: Ability to identify fraud rings and coordinated attacks
 4. **Scalable Architecture**: Handles millions of transactions with sub-second inference
@@ -35,7 +35,6 @@ This system transforms tabular transaction data into a heterogeneous graph where
   - Transactions (primary prediction targets)
   - Users/Cards (payment instruments)
   - Devices (transaction devices)
-  - Email domains (identity verification)
 
 - **Edges** capture relationships:
   - User-Transaction: "makes transaction"
