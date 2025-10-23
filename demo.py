@@ -37,25 +37,25 @@ def check_dependencies():
     for import_name, package_name in required_packages:
         try:
             __import__(import_name)
-            print(f"✅ {package_name} installed")
+            print(f" {package_name} installed")
         except ImportError:
             missing_packages.append(package_name)
-            print(f"❌ {package_name} not found")
+            print(f" {package_name} not found")
     
     # Additional specific checks
     try:
         import torch
         device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
-        print(f"🔧 PyTorch device: {device}")
+        print(f" PyTorch device: {device}")
     except Exception as e:
-        print(f"⚠️ Aviso PyTorch: {e}")
+        print(f" Aviso PyTorch: {e}")
     
     if missing_packages:
         print(f"Pacotes faltando: {missing_packages}")
         print("Execute: pip install -r requirements.txt")
         return False
     
-    print("✅ Todas as dependências estão instaladas")
+    print(" Todas as dependências estão instaladas")
     return True
 
 
@@ -72,7 +72,7 @@ def check_data():
     ]
     
     if not data_dir.exists():
-        print(f"❌ Diretório de dados não encontrado: {data_dir}")
+        print(f" Diretório de dados não encontrado: {data_dir}")
         print("Baixe o dataset IEEE-CIS Fraud Detection do Kaggle")
         return False
     
@@ -82,20 +82,20 @@ def check_data():
         if not file_path.exists():
             missing_files.append(file)
         else:
-            print(f"✅ {file} encontrado")
+            print(f" {file} encontrado")
     
     if missing_files:
-        print(f"❌ Arquivos faltando: {missing_files}")
+        print(f" Arquivos faltando: {missing_files}")
         return False
     
     # Verificar arquivo de configuração
     config_file = Path("config.yaml")
     if config_file.exists():
-        print("✅ config.yaml encontrado")
+        print(" config.yaml encontrado")
     else:
-        print("⚠️ config.yaml não encontrado - será criado automaticamente")
+        print("config.yaml não encontrado - será criado automaticamente")
     
-    print("✅ Todos os arquivos de dados estão disponíveis")
+    print(" Todos os arquivos de dados estão disponíveis")
     return True
 
 
