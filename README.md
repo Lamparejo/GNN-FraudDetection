@@ -92,13 +92,11 @@ graph['transaction', 'uses', 'card'].edge_index = transaction_card_edges
 - **Multi-model Architecture**: GraphSAGE, GAT, and HeteroGNN implementations
 - **Real-time Inference**: Sub-second fraud scoring for live transactions
 - **Batch Processing**: Efficient handling of historical data analysis
-- **Model Interpretability**: GNN explainer for decision transparency
 
 ### Data Processing
 - **Automated Feature Engineering**: 50+ engineered features from raw transaction data
 - **Graph Construction**: Automated heterogeneous graph building from tabular data
 - **Missing Value Handling**: Intelligent imputation preserving graph structure
-- **Scalable Pipeline**: Processes millions of transactions efficiently
 
 ### MLOps & Production
 - **Configurable Architecture**: YAML-based configuration management
@@ -241,7 +239,7 @@ python -c "
 import pandas as pd
 df = pd.read_csv('data/raw/train_transaction.csv', nrows=5)
 print(f'Transaction data preview: {df.shape}')
-print('✅ Data files accessible')
+print('Data files accessible')
 "
 ```
 
