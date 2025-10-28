@@ -112,21 +112,6 @@ graph['transaction', 'uses', 'card'].edge_index = transaction_card_edges
 - **Performance Metrics**: Comprehensive fraud detection KPIs
 - **Explainability Views**: Model decision interpretation tools
 
-## Performance Metrics
-
-### Model Performance (IEEE-CIS Dataset)
-- **Precision**: 0.847 (vs 0.623 baseline)
-- **Recall**: 0.792 (vs 0.534 baseline)
-- **F1-Score**: 0.819 (vs 0.576 baseline)
-- **AUC-ROC**: 0.923 (vs 0.841 baseline)
-- **AUC-PR**: 0.756 (vs 0.445 baseline)
-
-### Operational Performance
-- **Inference Latency**: <50ms for real-time scoring
-- **Throughput**: 10,000+ transactions per second
-- **Model Size**: <100MB for production deployment
-- **Memory Usage**: <2GB for inference server
-
 ## Installation & Quick Start
 
 ### Prerequisites
