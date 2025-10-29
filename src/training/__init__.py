@@ -8,7 +8,6 @@ evaluation pipeline for Graph Neural Network models.
 import torch
 import torch.nn as nn
 import torch.optim as optim
-from torch.optim.lr_scheduler import ReduceLROnPlateau
 from torch_geometric.data import HeteroData
 from sklearn.metrics import (
     accuracy_score, precision_score, recall_score, f1_score,
@@ -475,6 +474,72 @@ class GNNTrainer:
         
         return total_loss, metrics
     
+    def evaluate(self, mask_name: str = 'test', return_outputs: bool = False) -> Dict[str, Any]:
+        """Avalia o modelo em um split específico utilizando as máscaras do grafo.
+
+        Args:
+            mask_name: Nome da máscara a ser utilizada ("train", "val" ou "test").
+            return_outputs: Se verdadeiro, retorna também y_true, y_pred e y_scores.
+
+        Returns:
+            Dicionário contendo métricas, perda e tamanho do split avaliado.
+
+        Raises:
+            ValueError: Se a máscara solicitada não existir ou estiver vazia.
+        """
+        self.model.eval()
+
+        mask_attr = f"{mask_name}_mask"
+
+        with torch.no_grad():
+            if hasattr(self.data, 'x_dict'):  # Grafo heterogêneo
+                mask = getattr(self.data['transaction'], mask_attr, None)
+                if mask is None:
+                    raise ValueError(f"Máscara '{mask_attr}' inexistente para o grafo heterogêneo.")
+                if mask.sum().item() == 0:
+                    raise ValueError(f"Máscara '{mask_attr}' vazia para avaliação.")
+                logits = self.model(self.data.x_dict, self.data.edge_index_dict)
+                labels = self.data['transaction'].y
+            else:  # Grafo homogêneo
+                mask = getattr(self.data, mask_attr, None)
+                if mask is None:
+                    raise ValueError(f"Máscara '{mask_attr}' inexistente para o grafo homogêneo.")
+                if mask.sum().item() == 0:
+                    raise ValueError(f"Máscara '{mask_attr}' vazia para avaliação.")
+                logits = self.model(self.data.x, self.data.edge_index)
+                labels = self.data.y
+
+            selected_logits = logits[mask]
+            selected_labels = labels[mask]
+
+            if selected_labels.dtype != torch.long:
+                selected_labels = selected_labels.long()
+
+            loss = self.criterion(selected_logits, selected_labels)
+
+            probs = torch.softmax(selected_logits, dim=1)[:, 1]
+            preds = selected_logits.argmax(dim=1)
+
+            y_true_np = selected_labels.detach().cpu().numpy()
+            y_prob_np = probs.detach().cpu().numpy()
+            y_pred_np = preds.detach().cpu().numpy()
+
+            metrics = MetricsCalculator.calculate_metrics(y_true_np, y_pred_np, y_prob_np)
+
+            result: Dict[str, Any] = {
+                'split': mask_name,
+                'loss': float(loss.detach().cpu().item()),
+                'metrics': metrics,
+                'num_samples': int(mask.sum().item())
+            }
+
+            if return_outputs:
+                result['y_true'] = y_true_np
+                result['y_scores'] = y_prob_np
+                result['y_pred'] = y_pred_np
+
+            return result
+
     def train(self, epochs: int = 100, verbose: bool = True) -> Dict[str, Any]:
         """
         Executa o treinamento completo.

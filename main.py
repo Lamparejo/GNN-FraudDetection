@@ -9,6 +9,7 @@ and evaluation.
 import argparse
 import yaml
 from pathlib import Path
+from typing import Any
 import torch
 from loguru import logger
 
@@ -171,9 +172,25 @@ class FraudDetectionSystem:
             raise ValueError("Model must be trained before evaluation")
         
         with Timer("Model evaluation"):
-            # TODO: Implement evaluation on test set
-            # For now, return training summary
-            return self.trainer.get_training_summary()
+            results: dict[str, Any] = {}
+
+            # Sempre incluir o resumo do treinamento (melhor época/val)
+            try:
+                results['summary'] = self.trainer.get_training_summary()
+            except Exception as exc:
+                logger.warning(f"Não foi possível obter resumo do treinamento: {exc}")
+
+            # Avaliar splits disponíveis
+            for split_name, key in (("train", "training"), ("val", "validation"), ("test", "test")):
+                try:
+                    split_results = self.trainer.evaluate(mask_name=split_name, return_outputs=False)
+                    results[key] = split_results
+                except ValueError as exc:
+                    logger.warning(f"Avaliação ignorada para split '{split_name}': {exc}")
+                except Exception as exc:  # capturar erros inesperados sem interromper fluxo
+                    logger.error(f"Erro ao avaliar split '{split_name}': {exc}")
+
+            return results
     
     def run_full_pipeline(self) -> dict:
         """
@@ -333,7 +350,7 @@ def main():
         
         # Execute selected mode
         if args.mode == 'full':
-            results = system.run_full_pipeline()
+            system.run_full_pipeline()
             system.save_system(args.output_path)
             
         elif args.mode == 'train':

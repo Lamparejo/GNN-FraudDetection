@@ -1,0 +1,118 @@
+dashboard:
+  auto_refresh: true
+  cache_ttl: 300
+  port: 8501
+  refresh_interval: 30
+  theme: dark
+  title: Fraud Detection Dashboard
+data:
+  random_state: 42
+  sample_size: 50000
+  test_identity: ieee-fraud-detection/test_identity.csv
+  test_split: 0.2
+  test_transaction: ieee-fraud-detection/test_transaction.csv
+  train_identity: ieee-fraud-detection/train_identity.csv
+  train_transaction: ieee-fraud-detection/train_transaction.csv
+  val_split: 0.1
+evaluation:
+  metrics:
+  - accuracy
+  - precision
+  - recall
+  - f1_score
+  - roc_auc
+  - pr_auc
+  - confusion_matrix
+  thresholds:
+  - 0.1
+  - 0.2
+  - 0.3
+  - 0.4
+  - 0.5
+  - 0.6
+  - 0.7
+  - 0.8
+  - 0.9
+explainability:
+  epochs: 200
+  max_nodes_visualize: 50
+  method: GNNExplainer
+  num_samples: 100
+  save_explanations: true
+graph:
+  edge_types:
+  - - user
+    - makes
+    - transaction
+  - - transaction
+    - uses
+    - card
+  - - transaction
+    - from
+    - device
+  - - card
+    - shared_with
+    - card
+  - - device
+    - connected_to
+    - device
+  max_degree: 100
+  min_connections: 2
+  node_types:
+  - transaction
+  - user
+  - card
+  - device
+hardware:
+  device: auto
+  mixed_precision: true
+  num_workers: 4
+  pin_memory: true
+logging:
+  level: INFO
+  metrics:
+  - accuracy
+  - precision
+  - recall
+  - f1
+  - auc_roc
+  - auc_pr
+  wandb:
+    entity: null
+    log_model: true
+    project: fraud-detection-gnn
+model:
+  aggr: mean
+  dropout: 0.3
+  heads: 4
+  hidden_dim: 256
+  norm: batch
+  num_layers: 3
+  type: GraphSAGE
+production:
+  api_timeout: 5.0
+  inference_batch_size: 10000
+  max_concurrent_requests: 100
+  model_registry: results/models
+  monitoring:
+    alert_threshold: 0.05
+    enable: true
+    log_predictions: true
+project:
+  description: Fraud detection system using Graph Neural Networks
+  name: fraud_detection_gnn
+  version: 1.0.0
+training:
+  batch_size: 1024
+  class_weights:
+    fraud: 10.0
+    legitimate: 1.0
+  early_stopping_patience: 10
+  epochs: 100
+  learning_rate: 0.001
+  scheduler:
+    factor: 0.5
+    min_lr: 1e-6
+    patience: 5
+    type: ReduceLROnPlateau
+  weight_decay: 5e-4

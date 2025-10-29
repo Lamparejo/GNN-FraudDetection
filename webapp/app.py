@@ -167,12 +167,90 @@ class FraudDetectionDashboard:
         if not fraud_system:
             st.error(" Sistema de fraude não disponível")
             return
+        evaluation_results = st.session_state.get('evaluation_results') or {}
+        if not evaluation_results:
+            st.warning("Sem métricas de treinamento/validação/teste disponíveis. Execute o treinamento completo para obter resultados reais.")
+            return
+
+        training_info = evaluation_results.get('training') or {}
+        validation_info = evaluation_results.get('validation') or {}
+        test_info = evaluation_results.get('test') or {}
+
+        training_metrics_cached = training_info.get('metrics', {})
+        validation_metrics_cached = validation_info.get('metrics', {})
+        test_metrics_cached = test_info.get('metrics', {})
+        st.subheader("Resumo por conjunto")
+        summary_rows = []
+        if training_metrics_cached:
+            summary_rows.append({
+                'Conjunto': 'Treinamento',
+                'AUC-ROC': training_metrics_cached.get('auc_roc', 0.0),
+                'F1': training_metrics_cached.get('f1', 0.0),
+                'Precision': training_metrics_cached.get('precision', 0.0),
+                'Recall': training_metrics_cached.get('recall', 0.0),
+                'Accuracy': training_metrics_cached.get('accuracy', 0.0),
+                'Amostras': training_info.get('num_samples')
+            })
+        if validation_metrics_cached:
+            summary_rows.append({
+                'Conjunto': 'Validação',
+                'AUC-ROC': validation_metrics_cached.get('auc_roc', 0.0),
+                'F1': validation_metrics_cached.get('f1', 0.0),
+                'Precision': validation_metrics_cached.get('precision', 0.0),
+                'Recall': validation_metrics_cached.get('recall', 0.0),
+                'Accuracy': validation_metrics_cached.get('accuracy', 0.0),
+                'Amostras': validation_info.get('num_samples')
+            })
+        if test_metrics_cached:
+            summary_rows.append({
+                'Conjunto': 'Teste hold-out',
+                'AUC-ROC': test_metrics_cached.get('auc_roc', 0.0),
+                'F1': test_metrics_cached.get('f1', 0.0),
+                'Precision': test_metrics_cached.get('precision', 0.0),
+                'Recall': test_metrics_cached.get('recall', 0.0),
+                'Accuracy': test_metrics_cached.get('accuracy', 0.0),
+                'Amostras': test_info.get('num_samples')
+            })
+
+        if summary_rows:
+            summary_df = pd.DataFrame(summary_rows).set_index('Conjunto')
+            st.dataframe(summary_df, use_container_width=True)
+        else:
+            st.info("Sem métricas agregadas disponíveis no momento.")
+
+        split_options = []
+        if test_metrics_cached:
+            split_options.append(("Teste hold-out", 'test', test_info.get('num_samples')))
+        if validation_metrics_cached:
+            split_options.append(("Validação", 'val', validation_info.get('num_samples')))
+        if training_metrics_cached:
+            split_options.append(("Treinamento", 'train', training_info.get('num_samples')))
+        if not split_options:
+            st.warning("Nenhum split com métricas disponíveis.")
+            return
+
+        labels = [label for label, _, _ in split_options]
+        selected_label = st.radio(
+            "Conjunto para análises detalhadas",
+            labels,
+            index=0,
+            horizontal=True
+        )
+        selected_split = next(value for label, value, _ in split_options if label == selected_label)
+        selected_metrics_cached = (
+            test_metrics_cached if selected_split == 'test' else
+            validation_metrics_cached if selected_split == 'val' else
+            training_metrics_cached
+        )
+        if not selected_metrics_cached:
+            st.warning("Métricas indisponíveis para o conjunto selecionado.")
+            return
 
         # Controle de threshold local (sincronizado com a sidebar)
         col_thr1, col_thr2 = st.columns([3, 1])
         with col_thr1:
             thr_local = st.slider(
-                "Threshold para classificar fraude",
+                f"Threshold para classificar fraude ({selected_label})",
                 min_value=0.0,
                 max_value=1.0,
                 value=float(st.session_state.get('current_threshold', threshold)),
@@ -183,13 +261,12 @@ class FraudDetectionDashboard:
                 st.session_state.current_threshold = thr_local
                 st.rerun()
         threshold = float(st.session_state.get('current_threshold', thr_local))
-        st.info(f" Threshold em uso: {threshold:.2f}")
+        st.info(
+            f"Threshold em uso: {threshold:.2f}. Métricas abaixo usam o conjunto {selected_label} com esse limiar."
+        )
 
-        # Mostrar métricas do modelo real
-        evaluation_metrics = st.session_state.get('evaluation_metrics', {})
-
-        # Recalcular métricas com base no threshold usando dados de validação
-        y_true, y_scores, y_pred = self._get_validation_outputs(fraud_system, threshold)
+        # Recalcular métricas com base no threshold para o split escolhido
+        y_true, y_scores, y_pred = self._get_split_outputs(fraud_system, threshold, split=selected_split)
         if y_true is not None and y_pred is not None:
             try:
                 from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
@@ -198,15 +275,15 @@ class FraudDetectionDashboard:
                 rec = recall_score(y_true, y_pred, zero_division=0)
                 f1 = f1_score(y_true, y_pred, zero_division=0)
             except Exception:
-                acc = evaluation_metrics.get('accuracy', 0)
-                prec = evaluation_metrics.get('precision', 0)
-                rec = evaluation_metrics.get('recall', 0)
-                f1 = evaluation_metrics.get('f1', 0)
+                acc = selected_metrics_cached.get('accuracy', 0.0)
+                prec = selected_metrics_cached.get('precision', 0.0)
+                rec = selected_metrics_cached.get('recall', 0.0)
+                f1 = selected_metrics_cached.get('f1', 0.0)
         else:
-            acc = evaluation_metrics.get('accuracy', 0)
-            prec = evaluation_metrics.get('precision', 0)
-            rec = evaluation_metrics.get('recall', 0)
-            f1 = evaluation_metrics.get('f1', 0)
+            acc = selected_metrics_cached.get('accuracy', 0.0)
+            prec = selected_metrics_cached.get('precision', 0.0)
+            rec = selected_metrics_cached.get('recall', 0.0)
+            f1 = selected_metrics_cached.get('f1', 0.0)
 
         col1, col2, col3, col4 = st.columns(4)
         with col1:
@@ -218,7 +295,7 @@ class FraudDetectionDashboard:
         with col4:
             st.metric("F1-Score", f"{f1:.3f}")
 
-        # Contagem de positivos/negativos previstos na validação
+        # Contagem de positivos/negativos previstos
         if y_true is not None and y_pred is not None:
             try:
                 import numpy as np
@@ -230,7 +307,7 @@ class FraudDetectionDashboard:
                 with colp2:
                     st.metric("Pred. Neg.", f"{neg_count}")
                 with colp3:
-                    st.metric("Amostra (val)", f"{len(y_true)}")
+                    st.metric("Amostra", f"{len(y_true)}")
             except Exception:
                 pass
 
@@ -247,13 +324,16 @@ class FraudDetectionDashboard:
             st.metric("Épocas Treinadas", training_metrics.get('training_epochs', 0))
 
         with col3:
-            # AUC pode ser recalculada com base nos scores atuais
             try:
                 from sklearn.metrics import roc_auc_score
-                auc_val = roc_auc_score(y_true, y_scores) if (y_true is not None and y_scores is not None) else evaluation_metrics.get('auc_roc', 0)
+                auc_value = (
+                    roc_auc_score(y_true, y_scores)
+                    if (y_true is not None and y_scores is not None)
+                    else selected_metrics_cached.get('auc_roc', 0.0)
+                )
             except Exception:
-                auc_val = evaluation_metrics.get('auc_roc', 0)
-            st.metric("AUC-ROC", f"{auc_val:.3f}")
+                auc_value = selected_metrics_cached.get('auc_roc', 0.0)
+            st.metric("AUC-ROC", f"{auc_value:.3f}")
 
         # Curva ROC
         if y_true is not None and y_scores is not None:
@@ -263,7 +343,12 @@ class FraudDetectionDashboard:
                 fig_roc = go.Figure()
                 fig_roc.add_trace(go.Scatter(x=fpr, y=tpr, mode='lines', name='ROC', line=dict(color='#1f77b4')))
                 fig_roc.add_trace(go.Scatter(x=[0, 1], y=[0, 1], mode='lines', name='Aleatório', line=dict(color='gray', dash='dash')))
-                fig_roc.update_layout(title='Curva ROC', xaxis_title='False Positive Rate', yaxis_title='True Positive Rate', height=400)
+                fig_roc.update_layout(
+                    title=f'Curva ROC - {selected_label}',
+                    xaxis_title='False Positive Rate',
+                    yaxis_title='True Positive Rate',
+                    height=400
+                )
                 st.plotly_chart(fig_roc, width='stretch')
             except Exception as e:
                 st.warning(f"Não foi possível gerar a curva ROC: {e}")
@@ -272,12 +357,11 @@ class FraudDetectionDashboard:
         if y_true is not None and y_pred is not None:
             try:
                 from sklearn.metrics import confusion_matrix
-                import numpy as np
                 cm = confusion_matrix(y_true, y_pred)
                 tn, fp, fn, tp = (0, 0, 0, 0)
                 if cm.shape == (2, 2):
                     tn, fp, fn, tp = cm.ravel()
-                st.subheader("Matriz de Confusão")
+                st.subheader(f"Matriz de Confusão - {selected_label}")
                 col_cm1, col_cm2 = st.columns([2, 1])
                 with col_cm1:
                     fig_cm = go.Figure(data=go.Heatmap(
@@ -304,9 +388,29 @@ class FraudDetectionDashboard:
         if y_true is not None and y_scores is not None:
             try:
                 fig_hist = go.Figure()
-                fig_hist.add_trace(go.Histogram(x=y_scores, nbinsx=30, name='Scores de fraude', marker_color='#1f77b4', opacity=0.75))
-                fig_hist.add_shape(type='line', x0=threshold, x1=threshold, y0=0, y1=1, yref='paper', line=dict(color='red', dash='dash'))
-                fig_hist.update_layout(title='Distribuição de Scores (validação) com Threshold', xaxis_title='Score de fraude (prob)', yaxis_title='Contagem', barmode='overlay', height=350)
+                fig_hist.add_trace(go.Histogram(
+                    x=y_scores,
+                    nbinsx=30,
+                    name='Scores de fraude',
+                    marker_color='#1f77b4',
+                    opacity=0.75
+                ))
+                fig_hist.add_shape(
+                    type='line',
+                    x0=threshold,
+                    x1=threshold,
+                    y0=0,
+                    y1=1,
+                    yref='paper',
+                    line=dict(color='red', dash='dash')
+                )
+                fig_hist.update_layout(
+                    title=f'Distribuição de Scores ({selected_label}) com Threshold',
+                    xaxis_title='Score de fraude (prob)',
+                    yaxis_title='Contagem',
+                    barmode='overlay',
+                    height=350
+                )
                 st.plotly_chart(fig_hist, width='stretch')
             except Exception:
                 pass
@@ -355,7 +459,20 @@ class FraudDetectionDashboard:
             return
         
         # Calcular métricas atuais do modelo real
-        evaluation_metrics = st.session_state.get('evaluation_metrics', {})
+        evaluation_results = st.session_state.get('evaluation_results') or {}
+        training_info = evaluation_results.get('training') or {}
+        validation_info = evaluation_results.get('validation') or {}
+        test_info = evaluation_results.get('test') or {}
+
+        training_metrics = training_info.get('metrics', {})
+        val_metrics = validation_info.get('metrics', {})
+        test_metrics = test_info.get('metrics', {})
+
+        if not (training_metrics or val_metrics or test_metrics):
+            st.warning("Sem métricas para exibir. Execute o treinamento completo para gerar resultados reais.")
+            return
+
+        overview_metrics = test_metrics or val_metrics or training_metrics
         
         # KPIs principais do modelo treinado
         col1, col2, col3, col4 = st.columns(4)
@@ -363,32 +480,47 @@ class FraudDetectionDashboard:
         with col1:
             st.metric(
                 label="Accuracy",
-                value=f"{evaluation_metrics.get('accuracy', 0):.2%}",
-                delta="+Real"
+                value=f"{overview_metrics.get('accuracy', 0):.2%}",
+                delta="Teste" if test_metrics else "+Real"
             )
         
         with col2:
             st.metric(
                 label="Precision",
-                value=f"{evaluation_metrics.get('precision', 0):.2%}",
-                delta="+Real"
+                value=f"{overview_metrics.get('precision', 0):.2%}",
+                delta="Teste" if test_metrics else "+Real"
             )
         
         with col3:
             st.metric(
                 label="Recall",
-                value=f"{evaluation_metrics.get('recall', 0):.2%}",
-                delta="+Real"
+                value=f"{overview_metrics.get('recall', 0):.2%}",
+                delta="Teste" if test_metrics else "+Real"
             )
         
         with col4:
             st.metric(
                 label="F1-Score",
-                value=f"{evaluation_metrics.get('f1', 0):.2%}",
-                delta="+Real"
+                value=f"{overview_metrics.get('f1', 0):.2%}",
+                delta="Teste" if test_metrics else "+Real"
             )
         
         st.markdown("---")
+
+        # Destaque rápido das métricas por conjunto
+        info_cols = st.columns(3)
+        with info_cols[0]:
+            if training_metrics:
+                st.metric("AUC-ROC Treino", f"{training_metrics.get('auc_roc', 0):.3f}")
+                st.metric("F1 Treino", f"{training_metrics.get('f1', 0):.3f}")
+        with info_cols[1]:
+            if val_metrics:
+                st.metric("AUC-ROC Val", f"{val_metrics.get('auc_roc', 0):.3f}")
+                st.metric("F1 Val", f"{val_metrics.get('f1', 0):.3f}")
+        with info_cols[2]:
+            if test_metrics:
+                st.metric("AUC-ROC Teste", f"{test_metrics.get('auc_roc', 0):.3f}")
+                st.metric("F1 Teste", f"{test_metrics.get('f1', 0):.3f}")
         
         # Histórico de treinamento real
         if 'training_history' in st.session_state and st.session_state.training_history:
@@ -781,9 +913,9 @@ class FraudDetectionDashboard:
                 details_df = pd.DataFrame({
                     'Campo': ['User ID', 'Device ID', 'Card ID', 'Amount', 'Fraud Probability', 'Prediction'],
                     'Valor': [
-                        transaction['user_id'],
-                        transaction['device_id'],
-                        transaction['card_id'],
+                        str(transaction['user_id']),
+                        str(transaction['device_id']),
+                        str(transaction['card_id']),
                         f"${transaction['amount']:.2f}",
                         f"{fraud_prob:.2%}",
                         " FRAUDE" if is_fraud_predicted else " SEGURA"
@@ -885,7 +1017,7 @@ class FraudDetectionDashboard:
         st.title(" Configurações")
         
         # Configurações de dados
-        st.subheader("🗃️ Configurações de Dados")
+        st.subheader("Configurações de Dados")
         dcol1, dcol2, dcol3 = st.columns(3)
         with dcol1:
             sample_size = st.number_input(
@@ -1019,7 +1151,7 @@ class FraudDetectionDashboard:
         with col2:
             if st.button(" Retreinar Modelo"):
                 # Estimar tempo de treinamento baseado na configuração
-                estimated_time = epochs * 0.8  # ~0.8 minutos por época para GNN
+                estimated_time = epochs * 0.3  # ~0.3 minutos por época para GNN
                 if model_type == "GAT":
                     estimated_time *= 1.3  # GAT é mais lento
                 elif model_type == "HeteroGNN":
@@ -1031,7 +1163,7 @@ class FraudDetectionDashboard:
                 st.warning(f" Tempo estimado de treinamento: {estimated_time:.1f} minutos")
                 
                 # Confirmar se o usuário quer continuar
-                st.warning(" **ATENÇÃO**: Isso iniciará o treinamento REAL do modelo GNN. O processo pode levar muito tempo dependendo dos dados e configurações.")
+                st.warning(" **ATENÇÃO**: Isso iniciará o treinamento do modelo GNN. O processo pode levar muito tempo dependendo dos dados e configurações.")
                 
                 config = {
                     'model': {
@@ -1110,7 +1242,7 @@ class FraudDetectionDashboard:
                             
                             # Avaliar modelo treinado
                             st.info(" Avaliando modelo treinado...")
-                            evaluation_metrics = fraud_system.evaluate_model()
+                            evaluation_results = fraud_system.evaluate_model()
                             
                             # Resumo do grafo para a página de análise, se disponível
                             graph_summary = None
@@ -1136,7 +1268,7 @@ class FraudDetectionDashboard:
                                     torch.save({
                                         'model_state_dict': fraud_system.model.state_dict(),
                                         'config': config,
-                                        'metrics': evaluation_metrics,
+                                        'metrics': evaluation_results,
                                         'timestamp': timestamp
                                     }, model_path)
                                     st.info(f" Modelo salvo em: {model_path}")
@@ -1150,19 +1282,31 @@ class FraudDetectionDashboard:
                             st.session_state.training_in_progress = False
                             st.session_state.fraud_system = fraud_system
                             st.session_state.model_path = model_path
-                            st.session_state.evaluation_metrics = evaluation_metrics
+                            # Guardar resultados detalhados por split para uso futuro
+                            st.session_state.evaluation_results = evaluation_results
+
+                            validation_metrics = (evaluation_results.get('validation') or {}).get('metrics', {})
+                            test_metrics = (evaluation_results.get('test') or {}).get('metrics', {})
+                            summary_metrics = evaluation_results.get('summary') or {}
+
+                            # Métricas principais priorizam teste, depois validação, depois resumo
+                            primary_metrics = test_metrics or validation_metrics or summary_metrics
+
+                            st.session_state.evaluation_metrics = primary_metrics
                             st.session_state.training_history = training_history
                             st.session_state.graph_summary = graph_summary
                             
                             # Salvar métricas reais
                             st.session_state.training_metrics = {
-                                'f1_score': evaluation_metrics.get('f1', 0),
-                                'auc_roc': evaluation_metrics.get('auc_roc', 0),
-                                'precision': evaluation_metrics.get('precision', 0),
-                                'recall': evaluation_metrics.get('recall', 0),
-                                'accuracy': evaluation_metrics.get('accuracy', 0),
-                                'training_epochs': epochs,
-                                'model_type': model_type
+                                'f1_score': primary_metrics.get('f1', 0),
+                                'auc_roc': primary_metrics.get('auc_roc', 0),
+                                'precision': primary_metrics.get('precision', 0),
+                                'recall': primary_metrics.get('recall', 0),
+                                'accuracy': primary_metrics.get('accuracy', 0),
+                                'training_epochs': summary_metrics.get('epochs_trained', epochs),
+                                'model_type': model_type,
+                                'auc_val': validation_metrics.get('auc_roc') if validation_metrics else None,
+                                'auc_holdout': test_metrics.get('auc_roc') if test_metrics else None
                             }
                             
                             # Sucesso
@@ -1170,8 +1314,11 @@ class FraudDetectionDashboard:
                             status_text.text(" Treinamento concluído com sucesso!")
                             epoch_text.text("")
                             
-                            st.success(f"🎉 Modelo {model_type} treinado com sucesso!")
-                            st.success(f" F1-Score: {evaluation_metrics.get('f1', 0):.3f} | AUC-ROC: {evaluation_metrics.get('auc_roc', 0):.3f}")
+                            st.success(f" Modelo {model_type} treinado com sucesso!")
+                            st.success(
+                                f" F1-Score (principal): {primary_metrics.get('f1', 0):.3f} | "
+                                f"AUC-ROC (principal): {primary_metrics.get('auc_roc', 0):.3f}"
+                            )
                             
                             # Exibir histórico de treinamento se disponível
                             if training_history:
@@ -1233,31 +1380,46 @@ class FraudDetectionDashboard:
         else:
             st.warning(" Nenhum modelo carregado")
 
-    def _get_validation_outputs(self, fraud_system, threshold: float):
-        """Obtém y_true, y_scores e y_pred na partição de validação do grafo de treino."""
+    def _get_split_outputs(self, fraud_system, threshold: float, split: str = 'val'):
+        """Obtém y_true, y_scores e y_pred para um split específico do grafo de treino."""
         try:
+            if fraud_system is None or getattr(fraud_system, 'model', None) is None:
+                return None, None, None
+
             model = fraud_system.model
             data = fraud_system.train_graph
-            model.eval()
+            if data is None:
+                return None, None, None
+
+            mask_attr = f"{split}_mask"
+
             import torch
+            model.eval()
             with torch.no_grad():
                 if hasattr(data, 'x_dict'):
+                    mask = getattr(data['transaction'], mask_attr, None)
+                    if mask is None or mask.sum().item() == 0:
+                        return None, None, None
                     logits = model(data.x_dict, data.edge_index_dict)
                     labels = data['transaction'].y
-                    val_mask = data['transaction'].val_mask
-                    logits = logits[val_mask]
-                    y_true = labels[val_mask].cpu().numpy()
                 else:
+                    mask = getattr(data, mask_attr, None)
+                    if mask is None or mask.sum().item() == 0:
+                        return None, None, None
                     logits = model(data.x, data.edge_index)
                     labels = data.y
-                    val_mask = data.val_mask
-                    logits = logits[val_mask]
-                    y_true = labels[val_mask].cpu().numpy()
-                probs = torch.softmax(logits, dim=1)[:, 1].cpu().numpy()
+
+                logits = logits[mask]
+                y_true = labels[mask].detach().cpu().numpy()
+                probs = torch.softmax(logits, dim=1)[:, 1].detach().cpu().numpy()
                 y_pred = (probs > threshold).astype(int)
                 return y_true, probs, y_pred
         except Exception:
             return None, None, None
+
+    def _get_validation_outputs(self, fraud_system, threshold: float):
+        """Compatibilidade: reutiliza _get_split_outputs para validação."""
+        return self._get_split_outputs(fraud_system, threshold, split='val')
 
     def _predict_random_transaction_probability(self, fraud_system, split: str = 'val') -> float | None:
         """Seleciona aleatoriamente uma transação do split indicado e retorna a probabilidade de fraude.
@@ -1436,13 +1598,17 @@ class FraudDetectionDashboard:
                 ys.append(y0)
                 attrs = G.nodes[n]
                 tipo = attrs.get('tipo')
+                if not tipo:
+                    continue
                 if tipo == 'transaction':
                     fraud = int(attrs.get('fraud', 0))
                     colors.append(tipo_cores[f'transaction_{fraud}'])
                     texts.append(f"Transação {n.split('_')[1]} - {'Fraude' if fraud==1 else 'Legítima'}")
                 else:
+                    if tipo not in tipo_cores:
+                        continue
                     colors.append(tipo_cores[tipo])
-                    prefixo = {'user':'Usuário','card':'Cartão','device':'Dispositivo'}[tipo]
+                    prefixo = {'user':'Usuário','card':'Cartão','device':'Dispositivo'}.get(tipo, tipo.title())
                     texts.append(f"{prefixo} {n.split('_')[1]}")
             return go.Scatter(x=xs, y=ys, mode='markers', text=texts, hoverinfo='text',
                                marker=dict(size=8, color=colors, line=dict(width=0.5, color='#333')))
@@ -1650,11 +1816,13 @@ class FraudDetectionDashboard:
                 ys.append(y0)
                 attrs = G.nodes[n]
                 tipo = attrs.get('tipo')
+                if not tipo or tipo not in tipo_cores:
+                    continue
                 colors.append(tipo_cores[tipo])
                 if tipo == 'transaction_new':
                     texts.append("Nova Transação (t_new)")
                 else:
-                    prefixo = {'user':'Usuário','card':'Cartão','device':'Dispositivo'}[tipo]
+                    prefixo = {'user':'Usuário','card':'Cartão','device':'Dispositivo'}.get(tipo, tipo.title())
                     texts.append(f"{prefixo} {n.split('_')[1]}")
             return go.Scatter(x=xs, y=ys, mode='markers', text=texts, hoverinfo='text',
                                marker=dict(size=12, color=colors, line=dict(width=1, color='#333')))
@@ -1882,15 +2050,19 @@ class FraudDetectionDashboard:
                             card_id=int(manual_ctx.get('card_id', 0)),
                             baseline=baseline,
                             n_samples=int(n_samples),
-                            positive_only=bool(positive_only)
+                            positive_only=bool(positive_only),
+                            top_k_hint=int(top_k)
                         )
                     else:
+                        if idx is None:
+                            raise ValueError("Índice da transação não informado para explicação.")
                         exp = self._explain_transaction_occlusion(
                             fraud_system,
                             int(idx),
                             baseline=baseline,
                             n_samples=int(n_samples),
-                            positive_only=bool(positive_only)
+                            positive_only=bool(positive_only),
+                            top_k_hint=int(top_k)
                         )
                 except Exception as e:
                     exp = None
@@ -1912,6 +2084,13 @@ class FraudDetectionDashboard:
                         s = np.sum(np.abs(vals)) if not positive_only else np.sum(vals)
                         if s > 0:
                             vals = vals / s
+                    evaluated_count = exp.get('evaluated_feature_count')
+                    total_feats = exp.get('total_features')
+                    if evaluated_count is not None and total_feats:
+                        if evaluated_count < total_feats:
+                            st.caption(f"Oclusão executada em {evaluated_count} de {total_feats} features selecionadas via gradiente.")
+                        else:
+                            st.caption(f"Oclusão executada em todas as {total_feats} features.")
                     k = min(int(top_k), len(vals))
                     order = np.argsort(-vals)[:k]
                     x_labels = [feat_names[i] if feat_names is not None else f"feat_{i}" for i in order]
@@ -1938,6 +2117,9 @@ class FraudDetectionDashboard:
                     st.subheader("Importância por Tipo de Relação")
                     labels = list(rel_importance.keys())
                     vals = [float(rel_importance[k]) for k in labels]
+                    if all(v == 0.0 for v in vals):
+                        msg = "Todas as relações apresentaram Δ=0. Desmarque 'Somente deltas positivos' para ver contribuições negativas." if positive_only else "As relações analisadas não alteraram a probabilidade quando removidas."
+                        st.caption(msg)
                     figr = go.Figure(go.Bar(x=labels, y=vals, marker_color="#d62728"))
                     figr.update_layout(height=300, xaxis_title="Relação removida", yaxis_title="Δ prob (base - sem relação)")
                     st.plotly_chart(figr, use_container_width=True)
@@ -1950,14 +2132,18 @@ class FraudDetectionDashboard:
                     except Exception:
                         pass
 
-    def _explain_transaction_occlusion(self, fraud_system, tx_index: int, baseline: str = "mean", n_samples: int = 5, positive_only: bool = True):
+    def _explain_transaction_occlusion(self, fraud_system, tx_index: int, baseline: str = "mean", n_samples: int = 5,
+                                       positive_only: bool = True, top_k_hint: int = 20):
         """Explica predição para um nó de transação via oclusão de features e remoção de relações.
+        Utiliza gradientes para selecionar um subconjunto de features antes de rodar a oclusão para reduzir o tempo de execução.
         Retorna dict com: base_prob, feature_importance (np.array), feature_names (list), relation_importance (dict).
         """
         import torch
         import copy
+
         if fraud_system is None or getattr(fraud_system, 'model', None) is None:
             raise RuntimeError("Modelo não disponível")
+
         model = fraud_system.model
         data = getattr(fraud_system, 'train_graph', None)
         if data is None:
@@ -1966,109 +2152,163 @@ class FraudDetectionDashboard:
         dev = next(model.parameters()).device
         hd = copy.deepcopy(data)
 
-        # Move para device
-        for nt in hd.node_types:
-            if hasattr(hd[nt], 'x') and hd[nt].x is not None:
-                hd[nt].x = hd[nt].x.to(dev)
-            if hasattr(hd[nt], 'y') and hd[nt].y is not None:
-                hd[nt].y = hd[nt].y.to(dev)
-        for et in hd.edge_types:
-            if hasattr(hd[et], 'edge_index') and hd[et].edge_index is not None:
-                hd[et].edge_index = hd[et].edge_index.to(dev)
+        # Tentar mover todo o grafo para o device do modelo de forma vetorizada; fallback manual caso falhe
+        try:
+            hd = hd.to(dev)
+        except Exception:
+            for nt in hd.node_types:
+                if hasattr(hd[nt], 'x') and hd[nt].x is not None:
+                    hd[nt].x = hd[nt].x.to(dev)
+                if hasattr(hd[nt], 'y') and hd[nt].y is not None:
+                    hd[nt].y = hd[nt].y.to(dev)
+            for et in hd.edge_types:
+                if hasattr(hd[et], 'edge_index') and hd[et].edge_index is not None:
+                    hd[et].edge_index = hd[et].edge_index.to(dev)
 
-        # Prob base
         model.eval()
-        with torch.no_grad():
-            logits = model(hd.x_dict, hd.edge_index_dict)
-            base_prob = torch.softmax(logits[tx_index], dim=0)[1].item()
 
-        # Importância por feature (oclusão com baseline configurável)
+        base_prob = 0.0
+        grad_vec = None
+
+        # 1) Usa gradiente para priorizar features relevantes. Isso evita executar oclusão em centenas de colunas desnecessárias.
+        with torch.enable_grad():
+            tx_feats_grad = hd['transaction'].x.clone().detach().requires_grad_(True)
+            hd['transaction'].x = tx_feats_grad
+
+            # Garantir que demais features não carreguem histórico de gradiente
+            for nt in hd.node_types:
+                if nt != 'transaction' and hasattr(hd[nt], 'x') and hd[nt].x is not None:
+                    hd[nt].x = hd[nt].x.clone().detach()
+
+            model.zero_grad(set_to_none=True)
+            logits_grad = model(hd.x_dict, hd.edge_index_dict)
+            probs_grad = torch.softmax(logits_grad, dim=1)
+            target_prob_tensor = probs_grad[tx_index, 1]
+            base_prob = float(target_prob_tensor.item())
+            target_prob_tensor.backward()
+
+            if tx_feats_grad.grad is not None:
+                grad_vec = tx_feats_grad.grad[tx_index].detach()
+
+            model.zero_grad(set_to_none=True)
+            hd['transaction'].x = tx_feats_grad.detach()
+
         x_tx = hd['transaction'].x
-        feat_dim = int(x_tx.shape[1])
+        if tx_index >= x_tx.shape[0]:
+            raise IndexError(f"Índice de transação {tx_index} fora do intervalo ({x_tx.shape[0]} nós)")
+
+        feat_dim = int(x_tx.shape[1]) if x_tx.dim() > 1 else 0
+        if feat_dim == 0:
+            return {
+                'base_prob': float(base_prob),
+                'feature_importance': np.array([], dtype=float),
+                'feature_names': [],
+                'relation_importance': {},
+                'evaluated_feature_count': 0,
+                'total_features': 0,
+            }
+
         feat_names = [f"feat_{i}" for i in range(feat_dim)]
         deltas = np.zeros(feat_dim, dtype=float)
         original = x_tx[tx_index].clone()
+
         # Pré-computar estatísticas para baselines
         col_means = x_tx.mean(dim=0)
         col_medians = x_tx.median(dim=0).values
-        # Usar amostras do próprio conjunto como baseline se 'sampled'
-        for d in range(feat_dim):
-            saved = float(original[d].item())
-            # Escolher o valor de referência
-            if baseline == 'zero':
-                ref_vals = [0.0]
-            elif baseline == 'median':
-                ref_vals = [float(col_medians[d].item())]
-            elif baseline == 'sampled':
-                # Amostrar n_samples valores dessa coluna
-                vals_col = x_tx[:, d]
-                if vals_col.numel() > 0:
-                    # torch.randint para índices
-                    idxs = torch.randint(0, vals_col.shape[0], (max(1, int(n_samples)),), device=vals_col.device)
-                    ref_vals = [float(vals_col[i].item()) for i in idxs]
+
+        candidate_idx = list(range(feat_dim))
+        if grad_vec is not None and grad_vec.numel() == feat_dim:
+            grad_abs = torch.abs(torch.nan_to_num(grad_vec, nan=0.0, posinf=0.0, neginf=0.0))
+            budget = int(min(feat_dim, max(int(top_k_hint) * 3, 40)))
+            if budget > 0:
+                topk = torch.topk(grad_abs, k=budget)
+                candidate_idx = topk.indices.tolist()
+
+        evaluated_count = 0
+
+        with torch.inference_mode():
+            for d in candidate_idx:
+                if d < 0 or d >= feat_dim:
+                    continue
+                evaluated_count += 1
+                saved_val = original[d]
+
+                # Selecionar baseline
+                if baseline == 'zero':
+                    ref_vals = [0.0]
+                elif baseline == 'median':
+                    ref_vals = [float(col_medians[d].item())]
+                elif baseline == 'sampled':
+                    vals_col = x_tx[:, d]
+                    if vals_col.numel() > 0:
+                        idxs = torch.randint(0, vals_col.shape[0], (max(1, int(n_samples)),), device=vals_col.device)
+                        ref_vals = [float(vals_col[i].item()) for i in idxs]
+                    else:
+                        ref_vals = [float(col_means[d].item())]
                 else:
                     ref_vals = [float(col_means[d].item())]
-            else:  # 'mean' default
-                ref_vals = [float(col_means[d].item())]
 
-            # Agregar sobre amostras (se houver mais de uma)
-            prob2_vals = []
-            for rv in ref_vals:
-                x_tx[tx_index, d] = rv
-                with torch.no_grad():
+                prob2_vals = []
+                for rv in ref_vals:
+                    x_tx[tx_index, d] = saved_val.new_tensor(rv)
                     logits2 = model(hd.x_dict, hd.edge_index_dict)
                     prob2 = torch.softmax(logits2[tx_index], dim=0)[1].item()
-                prob2_vals.append(prob2)
-            prob2_mean = float(np.mean(prob2_vals))
-            delta = base_prob - prob2_mean
-            if positive_only:
-                delta = max(0.0, delta)
-            deltas[d] = float(delta)
-            x_tx[tx_index, d] = saved
+                    prob2_vals.append(prob2)
 
-        # Importância por relação: remover conexões do nó para cada tipo incidente
+                prob2_mean = float(np.mean(prob2_vals)) if prob2_vals else 0.0
+                delta = base_prob - prob2_mean
+                if positive_only:
+                    delta = max(0.0, delta)
+                deltas[d] = float(delta)
+                x_tx[tx_index, d] = saved_val
+
         rel_importance = {}
-        for et in hd.edge_types:
-            s, r, t = et
-            ei = hd[et].edge_index
-            # Arestas que chegam ao nó de transação
-            if t == 'transaction':
-                mask_inc = (ei[1] == tx_index)
-                if mask_inc.any().item():
-                    ei_saved = ei.clone()
-                    hd[et].edge_index = ei[:, ~mask_inc]
-                    with torch.no_grad():
+        with torch.inference_mode():
+            for et in hd.edge_types:
+                s, r, t = et
+                ei = hd[et].edge_index
+                if ei is None:
+                    continue
+
+                if t == 'transaction':
+                    mask_inc = (ei[1] == tx_index)
+                    inc_count = int(mask_inc.sum().item()) if mask_inc.numel() > 0 else 0
+                    if inc_count > 0:
+                        ei_saved = ei.clone()
+                        hd[et].edge_index = ei[:, ~mask_inc]
                         logits3 = model(hd.x_dict, hd.edge_index_dict)
                         prob3 = torch.softmax(logits3[tx_index], dim=0)[1].item()
-                    delta = base_prob - prob3
-                    if positive_only:
-                        delta = max(0.0, delta)
-                    rel_importance[f"{s}→transaction ({r})"] = float(delta)
-                    hd[et].edge_index = ei_saved
-            # Arestas que saem do nó de transação
-            if s == 'transaction':
-                mask_out = (ei[0] == tx_index)
-                if mask_out.any().item():
-                    ei_saved = ei.clone()
-                    hd[et].edge_index = ei[:, ~mask_out]
-                    with torch.no_grad():
+                        delta = base_prob - prob3
+                        if positive_only:
+                            delta = max(0.0, delta)
+                        rel_importance[f"{s}→transaction ({r})"] = float(delta)
+                        hd[et].edge_index = ei_saved
+                if s == 'transaction':
+                    mask_out = (ei[0] == tx_index)
+                    out_count = int(mask_out.sum().item()) if mask_out.numel() > 0 else 0
+                    if out_count > 0:
+                        ei_saved = ei.clone()
+                        hd[et].edge_index = ei[:, ~mask_out]
                         logits3 = model(hd.x_dict, hd.edge_index_dict)
                         prob3 = torch.softmax(logits3[tx_index], dim=0)[1].item()
-                    delta = base_prob - prob3
-                    if positive_only:
-                        delta = max(0.0, delta)
-                    rel_importance[f"transaction→{t} ({r})"] = float(delta)
-                    hd[et].edge_index = ei_saved
+                        delta = base_prob - prob3
+                        if positive_only:
+                            delta = max(0.0, delta)
+                        rel_importance[f"transaction→{t} ({r})"] = float(delta)
+                        hd[et].edge_index = ei_saved
 
         return {
             'base_prob': float(base_prob),
             'feature_importance': deltas,
             'feature_names': feat_names,
             'relation_importance': rel_importance,
+            'evaluated_feature_count': int(evaluated_count),
+            'total_features': int(feat_dim),
         }
 
     def _explain_manual_transaction_occlusion(self, fraud_system, amount: float, user_id: int, device_id: int, card_id: int,
-                                              baseline: str = "mean", n_samples: int = 5, positive_only: bool = True):
+                                              baseline: str = "mean", n_samples: int = 5, positive_only: bool = True,
+                                              top_k_hint: int = 20):
         """Reconstrói a transação manual (como em _predict_manual_transaction), obtém o índice do novo nó
         e delega para _explain_transaction_occlusion usando o índice dessa transação adicionada temporariamente.
         """
@@ -2143,7 +2383,12 @@ class FraudDetectionDashboard:
         tmp = SimpleNamespace(model=model, train_graph=hd)
 
         return self._explain_transaction_occlusion(
-            tmp, int(new_tx_idx), baseline=baseline, n_samples=n_samples, positive_only=positive_only
+            tmp,
+            int(new_tx_idx),
+            baseline=baseline,
+            n_samples=n_samples,
+            positive_only=positive_only,
+            top_k_hint=top_k_hint
         )
 
 
