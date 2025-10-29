@@ -8,7 +8,6 @@ All notable changes to this project will be documented in this file.
 - **Complete Translation**: Translated entire codebase from Portuguese to English
 - **Code Organization**: Restructured project following industry best practices
 - **Documentation Overhaul**: Professional README with business narrative
-- **Feature Documentation**: Comprehensive feature list in FEATURES.md
 
 ### Added
 - Professional README.md with business problem analysis and technical justification
