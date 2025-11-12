@@ -368,7 +368,6 @@ def main():
                 raise ValueError("Model path is required for predict mode")
             
             system = FraudDetectionSystem.load_system(args.model_path)
-            # TODO: Implement new data loading and prediction
             
         logger.info("Execution completed successfully!")
         
