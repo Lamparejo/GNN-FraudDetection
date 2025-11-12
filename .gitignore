@@ -12,57 +12,14 @@ data/graphs/*.pkl
 
 # Python
 __pycache__/
-*.py[cod]
-*$py.class
-*.so
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-parts/
-sdist/
-var/
-wheels/
 .mypy_cache/
-# PyTorch
-*.pth
-*.pt
-*.ckpt
-
-# Jupyter Notebook
-.ipynb_checkpoints
-
-# IPython
-profile_default/
-ipython_config.py
 
 # Environment variables
 .env
 .venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
 
 # IDE
 .vscode/
-.idea/
-*.swp
-*.swo
-*~
-
-# Operating System
-.DS_Store
-.DS_Store?
-._*
-.Spotlight-V100
-.Trashes
-ehthumbs.db
-Thumbs.db
 
 # Logs
 logs/*.log
@@ -85,22 +42,7 @@ results/models/trained/*.pt
 *.temp
 .cache/
 
-# Coverage reports
-htmlcov/
-.tox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
 
 # Streamlit
 .streamlit/
 
-# Database
-*.db
-*.sqlite3
